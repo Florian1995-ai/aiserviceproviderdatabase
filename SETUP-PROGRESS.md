@@ -3,53 +3,60 @@
 ## Project Info
 - **Subdomain**: aiserviceproviderdatabase.florianrolke.com
 - **Location**: `Websites Clients/aiserviceproviderdatabase/`
-- **GitHub Token**: Located in `../Website/.env` (GITHUB_ACCESS_TOKEN)
+- **GitHub Repo**: https://github.com/Florian1995-ai/aiserviceproviderdatabase
+- **Local Dev**: http://localhost:3000
 
 ## Completed Steps
 - [x] Created project folder structure
-- [x] Created package.json
+- [x] Created vite.config.ts, tsconfig.json, index.html
+- [x] Created React entry files (main.tsx, App.tsx)
+- [x] Initialized Git repository
+- [x] Created GitHub repo via API
+- [x] Pushed to GitHub
+- [x] Added Supabase client (read-only)
+- [x] Created text search interface MVP
+- [x] Tested on localhost
 
 ## Remaining Steps
-- [ ] Create vite.config.ts
-- [ ] Create tsconfig.json + tsconfig.node.json
-- [ ] Create index.html
-- [ ] Create src/main.tsx entry point
-- [ ] Create src/App.tsx
-- [ ] Create category data (src/data/categories.ts)
-- [ ] Create search components:
-  - SearchVoice.tsx (voice input)
-  - SearchText.tsx (text input field)
-  - SearchFilters.tsx (dropdown filters)
-- [ ] Initialize Git repository
-- [ ] Create GitHub repo via API
-- [ ] Push initial commit
-- [ ] Document Cloudflare + Coolify deployment
+- [ ] Deploy to Coolify
+- [ ] Configure Cloudflare subdomain
+- [ ] Add dropdown filters (after finalizing categories)
 
-## Folder Structure Created
+## Environment Variables (for deployment)
+Create these in Coolify:
 ```
-aiserviceproviderdatabase/
-├── src/
-│   ├── components/
-│   ├── data/
-│   ├── pages/
-│   ├── styles/
-│   └── lib/
-├── public/
-└── package.json
+VITE_SUPABASE_URL=https://twioemvizpqdfvpkhrnl.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-anon-key>
 ```
 
-## Search Input Types Needed
-1. **Voice Input** - Microphone button for voice search
-2. **Text Input** - Standard text field for typing
-3. **Dropdown Filters** - Category-based filtering:
-   - Location (cities, regions, remote)
-   - Service Type (AI Consulting, Automation, Data Analytics, etc.)
-   - Industry (Healthcare, Finance, E-commerce, etc.)
+## Cloudflare + Coolify Deployment
 
-## Deployment Flow (High Level)
-1. Build project: `npm run build` → outputs to `dist/`
-2. Cloudflare: Add CNAME record `aiserviceproviderdatabase` → Coolify app URL
-3. Coolify: Create new app, connect to GitHub repo, set build command
+### Step 1: Coolify Setup
+1. Go to your Coolify dashboard
+2. Create new project > Add Resource > Public Repository
+3. Repository URL: `https://github.com/Florian1995-ai/aiserviceproviderdatabase`
+4. Build settings:
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - Install command: `npm install`
+5. Add environment variables (see above)
+6. Deploy - note the generated URL
 
-## Resume Command
-When ready to continue, say: "Continue setting up the aiserviceproviderdatabase project"
+### Step 2: Cloudflare DNS
+1. Go to Cloudflare dashboard > Your domain > DNS
+2. Add record:
+   - Type: CNAME
+   - Name: `aiserviceproviderdatabase`
+   - Target: Your Coolify app URL (without https://)
+   - Proxy status: Proxied (orange cloud)
+3. Save
+
+### Step 3: Configure Coolify Domain
+1. Back in Coolify, go to your app settings
+2. Add custom domain: `aiserviceproviderdatabase.florianrolke.com`
+3. Enable HTTPS (Coolify handles SSL via Let's Encrypt)
+
+## Future Enhancements
+- Dropdown filters (region, service type, contact availability)
+- Semantic search using vector embeddings
+- Pagination for large result sets
