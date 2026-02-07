@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Search, MapPin, Briefcase, Cpu, X } from 'lucide-react'
-import { supabase } from './lib/supabase'
+import { useState } from 'react'
+import { Search, MapPin, Briefcase, X, Building2, Target } from 'lucide-react'
 
 interface Provider {
   id: string
@@ -18,192 +17,146 @@ interface Provider {
   pricing: string
   semantic_summary: string
   data_quality: string
+  use_cases?: string[]
+  business_functions?: string[]
+  industries_served?: string[]
+  similarity?: number
 }
 
-// Curated AI Services categories
-const AI_SERVICES = [
-  'AI Automation',
-  'AI Chatbots',
-  'AI Agents',
-  'AI Consulting',
-  'AI Integration',
-  'Machine Learning',
-  'Content Automation',
-  'Marketing Automation',
-  'Sales Automation',
-  'Workflow Automation',
-  'Data Analytics',
-  'Process Automation',
+// Canonical taxonomy from classification (Feb 2026)
+const USE_CASES = [
   'Voice AI',
-  'AI Development',
-  'GPT / LLM Solutions'
+  'Agentic AI',
+  'CRM & Sales Automation',
+  'Workflow & Process Automation',
+  'AI Content & Marketing',
+  'RAG & Knowledge Bases',
+  'Data Dashboards & Analytics',
+  'Document & Data Processing',
+  'Custom AI Development',
+  'On-Premise & Private AI',
+  'AI Web & App Design',
+  'AI Consulting & Education',
 ]
 
-// Regions for filtering
-const REGIONS = ['US', 'Canada', 'UK', 'Australia/NZ', 'Other']
+const BUSINESS_FUNCTIONS = [
+  'Marketing',
+  'Sales',
+  'Customer Service',
+  'Operations',
+  'Finance',
+  'People / HR',
+  'Leadership / Strategy',
+  'Legal / Compliance',
+]
 
-// Map country names to regions
-function getRegion(country: string): string {
-  if (!country) return 'Other'
-  const c = country.toLowerCase().trim()
+const INDUSTRIES = [
+  'E-commerce / Retail',
+  'SaaS / Technology',
+  'Healthcare / Medical',
+  'Financial Services / Insurance',
+  'Real Estate',
+  'Legal Services',
+  'Education / EdTech',
+  'Construction / Trades / Home Services',
+  'Professional Services / Consulting',
+  'Media / Entertainment',
+  'Cybersecurity',
+  'Government / Public Sector',
+  'Manufacturing / Logistics',
+  'Hospitality / Travel / Food Services',
+  'Industry Agnostic',
+]
 
-  // US variations
-  if (c === 'united states' || c === 'usa' || c === 'us' || c === 'united states of america') {
-    return 'US'
-  }
-  // Canada
-  if (c === 'canada') {
-    return 'Canada'
-  }
-  // UK variations
-  if (c === 'united kingdom' || c === 'uk' || c === 'england' || c === 'great britain' || c === 'scotland' || c === 'wales' || c === 'northern ireland') {
-    return 'UK'
-  }
-  // Australia/NZ
-  if (c === 'australia' || c === 'new zealand' || c === 'nz') {
-    return 'Australia/NZ'
-  }
-
-  return 'Other'
-}
+const REGIONS = [
+  'North America',
+  'Europe',
+  'Asia Pacific',
+  'Latin America',
+  'Middle East',
+  'Africa',
+  'Remote / Other',
+]
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [providers, setProviders] = useState<Provider[]>([])
-  const [allData, setAllData] = useState<Provider[]>([])
   const [loading, setLoading] = useState(false)
-  const [initialLoad, setInitialLoad] = useState(true)
+  const [resultCount, setResultCount] = useState(0)
+  const [suggestRelaxFilters, setSuggestRelaxFilters] = useState(false)
 
   // Filter states
   const [selectedRegion, setSelectedRegion] = useState('')
+  const [selectedUseCase, setSelectedUseCase] = useState('')
+  const [selectedBusinessFunction, setSelectedBusinessFunction] = useState('')
   const [selectedIndustry, setSelectedIndustry] = useState('')
-  const [selectedAIService, setSelectedAIService] = useState('')
 
-  // Unique values for dropdowns
-  const [industries, setIndustries] = useState<string[]>([])
+  // Call the Supabase Edge Function for vector search
+  const performSearch = async () => {
+    setLoading(true)
+    setSuggestRelaxFilters(false)
 
-  // Load initial data
-  useEffect(() => {
-    async function loadInitial() {
-      setLoading(true)
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          filters: {
+            useCase: selectedUseCase || null,
+            businessFunction: selectedBusinessFunction || null,
+            industry: selectedIndustry || null,
+            region: selectedRegion || null,
+            limit: 100,
+          },
+        }),
+      })
 
-      try {
-        // Fetch all data
-        const { data, error } = await supabase
-          .from('leads')
-          .select('*')
-          .limit(1500)
-
-        if (error) {
-          console.error('Fetch error:', error)
-          setLoading(false)
-          return
-        }
-
-        if (data && data.length > 0) {
-          setAllData(data)
-          setProviders(data.slice(0, 50))
-
-          // Extract TOP 10 industries (by frequency)
-          const industryCount: Record<string, number> = {}
-          data.forEach(p => {
-            if (p.industries) {
-              p.industries.split(',').forEach((ind: string) => {
-                const trimmed = ind.trim()
-                if (trimmed && trimmed.length > 2) {
-                  industryCount[trimmed] = (industryCount[trimmed] || 0) + 1
-                }
-              })
-            }
-          })
-          const top10Industries = Object.entries(industryCount)
-            .sort((a: [string, number], b: [string, number]) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([industry]: [string, number]) => industry)
-          setIndustries(top10Industries)
-
-          console.log(`Loaded ${data.length} providers`)
-        }
-      } catch (err) {
-        console.error('Load error:', err)
+      if (!response.ok) {
+        throw new Error('Search failed')
       }
 
-      setLoading(false)
-      setInitialLoad(false)
-    }
-    loadInitial()
-  }, [])
-
-  // Filter function - runs client-side for speed
-  const applyFilters = () => {
-    let filtered = [...allData]
-
-    // Text search (searches multiple fields)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(p =>
-        (p.name || '').toLowerCase().includes(query) ||
-        (p.semantic_summary || '').toLowerCase().includes(query) ||
-        (p.services || '').toLowerCase().includes(query) ||
-        (p.industries || '').toLowerCase().includes(query) ||
-        (p.city || '').toLowerCase().includes(query) ||
-        (p.country || '').toLowerCase().includes(query)
-      )
+      const result = await response.json()
+      setProviders(result.results || [])
+      setResultCount(result.count || 0)
+      setSuggestRelaxFilters(result.suggestRelaxFilters || false)
+    } catch (error) {
+      console.error('Search error:', error)
+      setProviders([])
+      setResultCount(0)
     }
 
-    // Region filter
-    if (selectedRegion) {
-      filtered = filtered.filter(p => getRegion(p.country) === selectedRegion)
-    }
-
-    // Industry filter
-    if (selectedIndustry) {
-      filtered = filtered.filter(p =>
-        (p.industries || '').toLowerCase().includes(selectedIndustry.toLowerCase())
-      )
-    }
-
-    // AI Service filter (searches in services and semantic_summary)
-    if (selectedAIService) {
-      const serviceQuery = selectedAIService.toLowerCase()
-      filtered = filtered.filter(p =>
-        (p.services || '').toLowerCase().includes(serviceQuery) ||
-        (p.semantic_summary || '').toLowerCase().includes(serviceQuery)
-      )
-    }
-
-    setProviders(filtered.slice(0, 100))
+    setLoading(false)
   }
 
   // Handle search form submit
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    applyFilters()
+    performSearch()
   }
-
-  // Apply filters when any filter changes
-  useEffect(() => {
-    if (!initialLoad && allData.length > 0) {
-      applyFilters()
-    }
-  }, [selectedRegion, selectedIndustry, selectedAIService, searchQuery])
 
   // Clear all filters
   const clearFilters = () => {
     setSearchQuery('')
     setSelectedRegion('')
+    setSelectedUseCase('')
+    setSelectedBusinessFunction('')
     setSelectedIndustry('')
-    setSelectedAIService('')
-    setProviders(allData.slice(0, 50))
+    setProviders([])
+    setResultCount(0)
+    setSuggestRelaxFilters(false)
   }
 
-  const hasActiveFilters = searchQuery || selectedRegion || selectedIndustry || selectedAIService
+  const hasActiveFilters = searchQuery || selectedRegion || selectedUseCase || selectedBusinessFunction || selectedIndustry
 
   return (
     <div className="app">
       <header>
         <h1>AI Service Provider Database</h1>
-        <p>Search 1,400+ AI and automation service providers by industry, services, and location</p>
+        <p>Search 3,900+ AI and automation service providers by use case, industry, and location</p>
       </header>
 
       <main>
@@ -215,17 +168,65 @@ function App() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, service, or keyword... (e.g., 'blog automation', 'chatbot')"
+              placeholder="Search by service, keyword, or describe what you need... (e.g., 'voice AI for real estate', 'CRM automation')"
               className="search-input"
             />
           </div>
-          <button type="submit" className="search-button">
-            Search
+          <button type="submit" className="search-button" disabled={loading}>
+            {loading ? 'Searching...' : 'Search'}
           </button>
         </form>
 
         {/* Filter Dropdowns */}
         <div className="filters">
+          <div className="filter-group">
+            <label>
+              <Target size={16} />
+              AI Use Case
+            </label>
+            <select
+              value={selectedUseCase}
+              onChange={(e) => setSelectedUseCase(e.target.value)}
+            >
+              <option value="">All Use Cases</option>
+              {USE_CASES.map(uc => (
+                <option key={uc} value={uc}>{uc}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>
+              <Building2 size={16} />
+              Business Function
+            </label>
+            <select
+              value={selectedBusinessFunction}
+              onChange={(e) => setSelectedBusinessFunction(e.target.value)}
+            >
+              <option value="">All Functions</option>
+              {BUSINESS_FUNCTIONS.map(bf => (
+                <option key={bf} value={bf}>{bf}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>
+              <Briefcase size={16} />
+              Industry
+            </label>
+            <select
+              value={selectedIndustry}
+              onChange={(e) => setSelectedIndustry(e.target.value)}
+            >
+              <option value="">All Industries</option>
+              {INDUSTRIES.map(industry => (
+                <option key={industry} value={industry}>{industry}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="filter-group">
             <label>
               <MapPin size={16} />
@@ -242,61 +243,42 @@ function App() {
             </select>
           </div>
 
-          <div className="filter-group">
-            <label>
-              <Briefcase size={16} />
-              Industry
-            </label>
-            <select
-              value={selectedIndustry}
-              onChange={(e) => setSelectedIndustry(e.target.value)}
-            >
-              <option value="">All Industries</option>
-              {industries.map(industry => (
-                <option key={industry} value={industry}>{industry}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>
-              <Cpu size={16} />
-              AI Service Type
-            </label>
-            <select
-              value={selectedAIService}
-              onChange={(e) => setSelectedAIService(e.target.value)}
-            >
-              <option value="">All AI Services</option>
-              {AI_SERVICES.map(service => (
-                <option key={service} value={service}>{service}</option>
-              ))}
-            </select>
-          </div>
-
           {hasActiveFilters && (
             <button className="clear-filters" onClick={clearFilters}>
               <X size={16} />
-              Clear Filters
+              Clear All
             </button>
           )}
         </div>
 
+        {/* Relaxed filter suggestion */}
+        {suggestRelaxFilters && (
+          <div className="filter-suggestion">
+            Too few results. Try removing some filters to see more providers.
+          </div>
+        )}
+
         {/* Results */}
         {loading ? (
-          <div className="loading">Loading providers...</div>
-        ) : (
+          <div className="loading">Searching providers...</div>
+        ) : resultCount > 0 ? (
           <div className="results">
             <p className="results-count">
-              {providers.length} provider{providers.length !== 1 ? 's' : ''} found
+              {resultCount} provider{resultCount !== 1 ? 's' : ''} found
               {hasActiveFilters && ' (filtered)'}
-              {providers.length === 100 && ' — showing first 100'}
             </p>
 
             <div className="providers-grid">
               {providers.map((provider) => (
                 <div key={provider.id} className="provider-card">
-                  <h3>{provider.name || 'Unknown'}</h3>
+                  <div className="card-header">
+                    <h3>{provider.name || 'Unknown'}</h3>
+                    {provider.similarity !== undefined && (
+                      <span className="relevance-score" title="Relevance score">
+                        {Math.round(provider.similarity * 100)}% match
+                      </span>
+                    )}
+                  </div>
 
                   <div className="badges">
                     {provider.country && (
@@ -305,18 +287,34 @@ function App() {
                         {provider.city ? `${provider.city}, ` : ''}{provider.country}
                       </span>
                     )}
-                    {provider.industries && (
-                      <span className="badge industry" title={provider.industries}>
-                        {provider.industries.split(',')[0].trim()}
-                        {provider.industries.includes(',') && '...'}
-                      </span>
-                    )}
                   </div>
 
-                  {provider.services && (
-                    <div className="services">
-                      <strong>Services:</strong> {provider.services.slice(0, 150)}
-                      {provider.services.length > 150 ? '...' : ''}
+                  {/* Taxonomy badges */}
+                  {provider.use_cases && provider.use_cases.length > 0 && (
+                    <div className="taxonomy-badges">
+                      <strong>Use Cases:</strong>
+                      <div className="badge-list">
+                        {provider.use_cases.slice(0, 3).map(uc => (
+                          <span key={uc} className="badge use-case">{uc}</span>
+                        ))}
+                        {provider.use_cases.length > 3 && (
+                          <span className="badge-more">+{provider.use_cases.length - 3} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {provider.business_functions && provider.business_functions.length > 0 && (
+                    <div className="taxonomy-badges">
+                      <strong>Functions:</strong>
+                      <div className="badge-list">
+                        {provider.business_functions.slice(0, 3).map(bf => (
+                          <span key={bf} className="badge function">{bf}</span>
+                        ))}
+                        {provider.business_functions.length > 3 && (
+                          <span className="badge-more">+{provider.business_functions.length - 3}</span>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -351,15 +349,20 @@ function App() {
               ))}
             </div>
 
-            {providers.length === 0 && !initialLoad && (
-              <p className="no-results">No providers found. Try adjusting your filters or search term.</p>
-            )}
+          </div>
+        ) : hasActiveFilters ? (
+          <p className="no-results">No providers found. Try adjusting your filters or search term.</p>
+        ) : (
+          <div className="welcome-message">
+            <p>Welcome! Use the search and filters above to find AI service providers.</p>
+            <p>Try searching for "voice AI", "CRM automation", or select a use case from the dropdown.</p>
           </div>
         )}
       </main>
 
       <footer>
-        <p>Data last updated: January 2025 | {allData.length > 0 ? allData.length.toLocaleString() : '1,400'}+ verified AI service providers</p>
+        <p>Data last updated: February 2026 | 3,900+ verified AI service providers</p>
+        <p>Powered by vector similarity search with LLM-classified taxonomy</p>
       </footer>
     </div>
   )
